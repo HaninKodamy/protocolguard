@@ -1,0 +1,12 @@
+# Small development list for testing the guard by hand.
+# The experiments use a vendor list built from the real BPI Challenge 2019 data.
+vendors:
+  V001:
+    name: Nordic Office Supply
+    account: FAKE-SE-0001
+  V002:
+    name: Baltic Tech Distribution
+    account: FAKE-SE-0002
+  V003:
+    name: Lindqvist Electronics
+    account: FAKE-SE-0003

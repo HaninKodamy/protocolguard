@@ -1,0 +1,145 @@
+# ProtocolGuard: purchase-to-pay interaction protocol
+# Every purchase is one "case". The guard tracks the state of each case
+# and checks every message and action against the rules in this file.
+
+protocol:
+  name: purchase_to_pay
+  version: "0.1"
+
+roles:
+  requester:
+    description: Employee's assistant agent that asks for purchases.
+  procurement:
+    description: LLM agent that reads vendor quotes (untrusted text) and recommends one.
+  approver:
+    description: Checks company policy, then approves or escalates.
+  human_manager:
+    description: Human who approves high-value purchases.
+  payment:
+    description: Executes approved payments through a fake bank tool.
+  
+states:
+  initial: START
+  final: [PAID, REJECTED]
+  all: [START, REQUESTED, RECOMMENDED, PENDING_HUMAN, APPROVED, PAID, REJECTED]
+
+
+parameters:
+  human_approval_threshold: 5000   # EUR. Above this amount, a human must approve.
+
+# Registries: trusted company data the guard checks against.
+registries:
+  vendors: data/vendors.yaml
+# Messages: who may send what, to whom, and in which state.
+
+messages:
+  purchase_request:
+    senders: [requester]
+    receivers: [procurement]
+    from_states: [START]
+    to_state: REQUESTED #Which state does the case move to after it’s accepted?
+    required_fields: [item, quantity, budget]
+
+  recommendation:
+    senders: [procurement]
+    receivers: [approver]
+    from_states: [REQUESTED]
+    to_state: RECOMMENDED
+    required_fields: [vendor_id, amount]
+    conditions:
+      - type: in_registry          # the vendor must be an approved vendor
+        field: vendor_id
+        registry: vendors
+        on_fail: block
+      - type: max_from_case        # the amount must not exceed the requested budget
+        field: amount
+        case_field: budget
+        on_fail: block
+
+  approval:
+    senders: [approver]
+    receivers: [payment]
+    from_states: [RECOMMENDED]
+    to_state: APPROVED
+    required_fields: [vendor_id, amount]
+    conditions:
+      - type: matches_case         # must approve exactly the recommended vendor
+        field: vendor_id
+        case_field: vendor_id
+        on_fail: block
+      - type: matches_case         # and exactly the recommended amount
+        field: amount
+        case_field: amount
+        on_fail: block
+      - type: max_parameter        # too large: send to the human instead
+        field: amount
+        parameter: human_approval_threshold
+        on_fail: escalate
+
+  payment_confirmation:
+    senders: [payment]
+    receivers: [requester]
+    from_states: [APPROVED]
+    to_state: PAID
+    required_fields: [transaction_id]
+
+  escalation:
+    senders: [approver]
+    receivers: [human_manager]
+    from_states: [RECOMMENDED]
+    to_state: PENDING_HUMAN
+    required_fields: [vendor_id, amount, reason]
+    conditions:
+      - type: matches_case
+        field: vendor_id
+        case_field: vendor_id
+        on_fail: block
+      - type: matches_case
+        field: amount
+        case_field: amount
+        on_fail: block
+
+  human_approval:
+    senders: [human_manager]
+    receivers: [payment]
+    from_states: [PENDING_HUMAN]
+    to_state: APPROVED
+    required_fields: [vendor_id, amount]
+    conditions:
+      - type: matches_case
+        field: vendor_id
+        case_field: vendor_id
+        on_fail: block
+      - type: matches_case
+        field: amount
+        case_field: amount
+        on_fail: block
+
+  rejection:
+    senders: [approver, human_manager]
+    receivers: [requester]
+    from_states: [RECOMMENDED, PENDING_HUMAN]
+    to_state: REJECTED
+    required_fields: [reason]
+
+# Actions: things an agent does in the world (tool calls), not messages.
+actions:
+  execute_payment:
+    performers: [payment]
+    allowed_states: [APPROVED]
+    required_fields: [vendor_id, amount, account]
+    conditions:
+      - type: matches_case
+        field: vendor_id
+        case_field: vendor_id
+        on_fail: block
+      - type: matches_case
+        field: amount
+        case_field: amount
+        on_fail: block
+      - type: matches_registry     # money can only go to the vendor's registered account
+        field: account
+        registry: vendors
+        key_field: vendor_id
+        registry_field: account
+        on_fail: block
