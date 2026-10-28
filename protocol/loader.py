@@ -32,6 +32,7 @@ class Protocol:
     messages: dict
     actions: dict
     registries: dict
+    escalation: dict
 
 def read_yaml(path):
     """Open a YAML file and return its contents as Python data."""
@@ -87,6 +88,13 @@ def check_protocol(raw, registries):
         if state not in states:
             errors.append(f"final state '{state}' is not in the state list")
 
+    # Escalation must name a real role and a real state.
+    escalation = raw.get("escalation", {})
+    if escalation.get("role") not in roles:
+        errors.append(f"escalation: unknown role '{escalation.get('role')}'")
+    if escalation.get("state") not in states:
+        errors.append(f"escalation: unknown state '{escalation.get('state')}'")
+
     # Every message must name real roles and real states.
     for name, rule in raw.get("messages", {}).items():
         where = f"message '{name}'"
@@ -111,6 +119,9 @@ def check_protocol(raw, registries):
             errors.append(f"{where}: has no performers")
         if not rule.get("allowed_states"):
             errors.append(f"{where}: has no allowed_states")
+        limit = rule.get("max_per_case")
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            errors.append(f"{where}: max_per_case must be a whole number, 1 or more")
         for role in rule.get("performers", []):
             if role not in roles:
                 errors.append(f"{where}: unknown role '{role}'")
@@ -137,6 +148,7 @@ def load_protocol(path):
         messages=raw.get("messages", {}),
         actions=raw.get("actions", {}),
         registries=registries,
+        escalation=raw.get("escalation", {}),
     )
 
 def print_summary(protocol):
@@ -144,6 +156,7 @@ def print_summary(protocol):
     print(f"Protocol: {protocol.name} (version {protocol.version})")
     print(f"Roles:    {', '.join(protocol.roles)}")
     print(f"States:   {', '.join(protocol.states['all'])}")
+    print(f"Escalation: {protocol.escalation['role']} (case waits in {protocol.escalation['state']})")
     print("\nMessages:")
     for name, rule in protocol.messages.items():
         route = f"{'/'.join(rule['senders'])} -> {'/'.join(rule['receivers'])}"
@@ -155,7 +168,7 @@ def print_summary(protocol):
         who = "/".join(rule["performers"])
         when = "/".join(rule["allowed_states"])
         count = len(rule.get("conditions", []))
-        print(f"  {name:22} by {who} in {when}   conditions: {count}")
+        print(f"  {name:22} by {who} in {when}, max {rule['max_per_case']} per case   conditions: {count}")
     print()
     for name, entries in protocol.registries.items():
         print(f"Registry '{name}': {len(entries)} entries")

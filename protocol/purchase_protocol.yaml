@@ -4,7 +4,7 @@
 
 protocol:
   name: purchase_to_pay
-  version: "0.1"
+  version: "0.2"
 
 roles:
   requester:
@@ -30,8 +30,13 @@ parameters:
 # Registries: trusted company data the guard checks against.
 registries:
   vendors: data/vendors.yaml
-# Messages: who may send what, to whom, and in which state.
 
+# Escalation: what "escalate" means in this protocol.
+escalation:
+  role: human_manager      # who is asked to decide
+  state: PENDING_HUMAN     # where the case waits for the decision
+
+# Messages: who may send what, to whom, and in which state.
 messages:
   purchase_request:
     senders: [requester]
@@ -127,6 +132,7 @@ actions:
   execute_payment:
     performers: [payment]
     allowed_states: [APPROVED]
+    max_per_case: 1                # a payment can happen only once per purchase
     required_fields: [vendor_id, amount, account]
     conditions:
       - type: matches_case
