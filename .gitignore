@@ -4,3 +4,4 @@ __pycache__/
 .env
 data/bpi2019/
 data/vendors_bpi.yaml
+logs/
