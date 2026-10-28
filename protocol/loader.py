@@ -42,13 +42,22 @@ def read_yaml(path):
     with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
-def load_registries(raw):
-    """Read every registry file named in the protocol."""
+def load_registries(raw, overrides=None):
+    """Read every registry file named in the protocol.
+
+    overrides can replace a registry's file, e.g. {"vendors": "data/vendors.yaml"} in tests.
+    """
+    paths = dict(raw.get("registries", {}))
+    paths.update(overrides or {})
+
     registries = {}
-    for name, relative_path in raw.get("registries", {}).items():
-        data = read_yaml(PROJECT_ROOT / relative_path)
+    for name, relative_path in paths.items():
+        file_path = PROJECT_ROOT / relative_path
+        if not file_path.exists():
+            raise ProtocolError(f"Registry '{name}' file not found: {relative_path}")
+        data = read_yaml(file_path)
         if name not in data:
-            raise ValueError(f"Registry file {relative_path} must start with '{name}:'")
+            raise ProtocolError(f"Registry file {relative_path} must start with '{name}:'")
         registries[name] = data[name]
     return registries
 
@@ -132,10 +141,10 @@ def check_protocol(raw, registries):
 
     return errors
 
-def load_protocol(path):
+def load_protocol(path, registry_files=None):
     """Read, check and return a protocol. Stops with an error if anything is wrong."""
     raw = read_yaml(path)
-    registries = load_registries(raw)
+    registries = load_registries(raw, registry_files)
     errors = check_protocol(raw, registries)
     if errors:
         raise ProtocolError("Protocol has problems:\n  - " + "\n  - ".join(errors))

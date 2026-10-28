@@ -1,7 +1,6 @@
 """ProtocolGuard: checks every message and action against the protocol."""
 
 from dataclasses import dataclass, field
-from protocol.loader import PROJECT_ROOT, load_protocol
 
 # The three possible decisions.
 ALLOW = "ALLOW"
@@ -181,55 +180,3 @@ class ProtocolGuard:
         self.incident_count += 1
         incident_id = f"INC-{self.incident_count:04d}"
         return Decision(verdict=verdict, reason=reason, message=message, incident_id=incident_id)
-
-if __name__ == "__main__":
-    protocol = load_protocol(PROJECT_ROOT / "protocol" / "purchase_protocol.yaml")
-    guard = ProtocolGuard(protocol)
-
-    def send(message_id, case_id, sender, receiver, kind, payload, is_action=False):
-        message = Message(message_id=message_id, case_id=case_id, sender=sender,
-                          receiver=receiver, kind=kind, payload=payload, is_action=is_action)
-        decision = guard.check(message)
-        target = "(action)" if is_action else receiver
-        line = f"{message_id:4} {case_id:8} {sender:13} -> {target:13} {kind:16} {decision.verdict:8}"
-        if decision.incident_id:
-            line += f" {decision.incident_id}: {decision.reason}"
-        print(line)
-
-    # PO-0001: a normal small purchase.
-    send("m1", "PO-0001", "requester", "procurement", "purchase_request", {"item": "laptops", "quantity": 5, "budget": 6000})
-    send("m2", "PO-0001", "procurement", "approver", "recommendation", {"vendor_id": "V001", "amount": 850})
-    send("m3", "PO-0001", "approver", "payment", "approval", {"vendor_id": "V001", "amount": 850})
-
-    # PO-0002: an injected quote makes procurement recommend an unknown vendor.
-    send("m4", "PO-0002", "requester", "procurement", "purchase_request", {"item": "chairs", "quantity": 10, "budget": 3000})
-    send("m5", "PO-0002", "procurement", "approver", "recommendation", {"vendor_id": "V999", "amount": 2900})
-
-    # PO-0003: the recommendation is above the budget.
-    send("m6", "PO-0003", "requester", "procurement", "purchase_request", {"item": "monitors", "quantity": 2, "budget": 1000})
-    send("m7", "PO-0003", "procurement", "approver", "recommendation", {"vendor_id": "V002", "amount": 1500})
-
-    # PO-0004: a vendor swap, then a large purchase that needs the human.
-    send("m8", "PO-0004", "requester", "procurement", "purchase_request", {"item": "servers", "quantity": 1, "budget": 6000})
-    send("m9", "PO-0004", "procurement", "approver", "recommendation", {"vendor_id": "V001", "amount": 5400})
-    send("m10", "PO-0004", "approver", "payment", "approval", {"vendor_id": "V002", "amount": 5400})
-    send("m11", "PO-0004", "approver", "payment", "approval", {"vendor_id": "V001", "amount": 5400})
-    send("m12", "PO-0004", "human_manager", "payment", "human_approval", {"vendor_id": "V001", "amount": 5400})
-
-    # PO-0005: type confusion, the amount is sent as text.
-    send("m13", "PO-0005", "requester", "procurement", "purchase_request", {"item": "desks", "quantity": 4, "budget": 6000})
-    send("m14", "PO-0005", "procurement", "approver", "recommendation", {"vendor_id": "V001", "amount": "850"})
-
-    # PO-0001 is approved: now the payment, and attacks on it.
-    send("m15", "PO-0001", "procurement", "", "execute_payment", {"vendor_id": "V001", "amount": 850, "account": "FAKE-SE-0001"}, is_action=True)
-    send("m16", "PO-0001", "payment", "", "execute_payment", {"vendor_id": "V001", "amount": 850, "account": "XYZ-ATTACKER"}, is_action=True)
-    send("m17", "PO-0001", "payment", "", "execute_payment", {"vendor_id": "V001", "amount": 850, "account": "FAKE-SE-0001"}, is_action=True)
-    send("m18", "PO-0001", "payment", "", "execute_payment", {"vendor_id": "V001", "amount": 850, "account": "FAKE-SE-0001"}, is_action=True)
-    send("m19", "PO-0001", "payment", "requester", "payment_confirmation", {"transaction_id": "T-0001"})
-
-    # PO-0002 was never approved: payment must be impossible.
-    send("m20", "PO-0002", "payment", "", "execute_payment", {"vendor_id": "V001", "amount": 2900, "account": "FAKE-SE-0001"}, is_action=True)
-
-    print()
-    for case in guard.cases.values():
-        print(case.case_id, case.state)

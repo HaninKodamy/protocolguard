@@ -29,7 +29,7 @@ parameters:
 
 # Registries: trusted company data the guard checks against.
 registries:
-  vendors: data/vendors.yaml
+  vendors: data/vendors_bpi.yaml   # real vendors (BPI 2019); tests use data/vendors.yaml
 
 # Escalation: what "escalate" means in this protocol.
 escalation:
