@@ -1,7 +1,7 @@
 """Scripted agents: simple, predictable agents that react to the messages they receive."""
 
 from bus.message_bus import FakeBank, MessageBus
-from guards.protocol_guard import ALLOW, ProtocolGuard
+from guards.protocol_guard import ALLOW, NoGuard, ProtocolGuard
 from protocol.loader import PROJECT_ROOT, load_protocol
 
 PROTOCOL_FILE = PROJECT_ROOT / "protocol" / "purchase_protocol.yaml"
@@ -109,11 +109,15 @@ class Payment:
                      {"transaction_id": transaction_id})
 
 
-def build_sandbox(quotes, registry_files=None):
-    """Create the whole sandbox: protocol, guard, bus, bank, and the five agents."""
+def build_sandbox(quotes, registry_files=None, use_guard=True, make_attackers=None):
+    """Create the whole sandbox: protocol, guard, bus, bank, and the five agents.
+    use_guard=False gives the no-guard baseline.
+    make_attackers(protocol) can return compromised agents that replace honest ones, by role.
+    """
     protocol = load_protocol(PROTOCOL_FILE, registry_files=registry_files)
+    guard = ProtocolGuard(protocol) if use_guard else NoGuard(protocol)
     bank = FakeBank()
-    bus = MessageBus(ProtocolGuard(protocol))
+    bus = MessageBus(guard)
     bus.add_tool("execute_payment", bank.execute_payment)
     agents = {
         "requester": Requester("alice"),
@@ -122,6 +126,8 @@ def build_sandbox(quotes, registry_files=None):
         "human_manager": HumanManager("maria", approve_up_to=10000),
         "payment": Payment("paybot", protocol.registries["vendors"]),
     }
+    if make_attackers:
+        agents.update(make_attackers(protocol))
     for role, agent in agents.items():
         bus.register(agent, role)
     return bus, bank, agents

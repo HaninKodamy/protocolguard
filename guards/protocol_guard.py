@@ -180,3 +180,12 @@ class ProtocolGuard:
         self.incident_count += 1
         incident_id = f"INC-{self.incident_count:04d}"
         return Decision(verdict=verdict, reason=reason, message=message, incident_id=incident_id)
+
+class NoGuard:
+    """Baseline for experiments: allows everything. Shows what happens without protection."""
+
+    def __init__(self, protocol):
+        self.protocol = protocol
+
+    def check(self, message):
+        return Decision(verdict=ALLOW, reason="no guard: everything is allowed", message=message)

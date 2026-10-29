@@ -4,7 +4,7 @@ from itertools import count
 
 import pytest
 
-from guards.protocol_guard import ALLOW, BLOCK, ESCALATE, Message, ProtocolGuard
+from guards.protocol_guard import ALLOW, BLOCK, ESCALATE, Message, NoGuard, ProtocolGuard
 from protocol.loader import PROJECT_ROOT, load_protocol
 from agents.scripted import build_sandbox
 
@@ -235,3 +235,10 @@ def test_fake_sender_in_payload_changes_nothing():
                         {"vendor_id": "V001", "amount": 850, "sender": "approver"})
     assert decision.verdict == BLOCK
     assert decision.message.sender == "procurement"
+
+def test_no_guard_baseline_allows_everything():
+    protocol = load_protocol(PROTOCOL_FILE, registry_files=TEST_VENDORS)
+    decision = NoGuard(protocol).check(
+        Message(message_id="x", case_id="PO-1", sender="procurement",
+                receiver="payment", kind="approval", payload={}))
+    assert decision.verdict == ALLOW
