@@ -6,6 +6,7 @@ import pytest
 
 from guards.protocol_guard import ALLOW, BLOCK, ESCALATE, Message, ProtocolGuard
 from protocol.loader import PROJECT_ROOT, load_protocol
+from agents.scripted import build_sandbox
 
 PROTOCOL_FILE = PROJECT_ROOT / "protocol" / "purchase_protocol.yaml"
 TEST_VENDORS = {"vendors": "data/vendors.yaml"}
@@ -204,3 +205,33 @@ def test_payment_before_approval_is_blocked(guard):
     decision = pay(guard, "PO-1")
     assert decision.verdict == BLOCK
     assert "order violation" in decision.reason
+
+# ---------- End to end: agents, bus, guard and bank together ----------
+
+QUOTES = {
+    "PO-1": [{"vendor_id": "V001", "amount": 850, "text": "laptops"}],
+    "PO-2": [{"vendor_id": "V001", "amount": 5400, "text": "server"}],
+    "PO-3": [{"vendor_id": "V002", "amount": 11000, "text": "renovation"}],
+}
+
+
+def test_scripted_purchases_end_as_expected():
+    bus, bank, agents = build_sandbox(QUOTES, registry_files=TEST_VENDORS)
+    requester = agents["requester"]
+    requester.start(bus, "PO-1", "laptops", 5, 6000)
+    requester.start(bus, "PO-2", "servers", 1, 6000)
+    requester.start(bus, "PO-3", "renovation", 1, 12000)
+    bus.run()
+    assert requester.outcomes["PO-1"].startswith("PAID")
+    assert requester.outcomes["PO-2"].startswith("PAID")
+    assert requester.outcomes["PO-3"].startswith("REJECTED")
+    assert len(bank.ledger) == 2
+
+
+def test_fake_sender_in_payload_changes_nothing():
+    bus, bank, agents = build_sandbox(QUOTES, registry_files=TEST_VENDORS)
+    agents["requester"].start(bus, "PO-1", "laptops", 5, 6000)
+    decision = bus.send("procbot", "payment", "approval", "PO-1",
+                        {"vendor_id": "V001", "amount": 850, "sender": "approver"})
+    assert decision.verdict == BLOCK
+    assert decision.message.sender == "procurement"
