@@ -1,7 +1,9 @@
 """Run every attack with and without the guard, and print the results table."""
 
 import csv
+import time
 
+from bpi.workload import sample_purchases
 from agents.scripted import build_sandbox
 from attacks.scenarios import ATTACKS, NORMAL_PURCHASES, NORMAL_QUOTES
 from protocol.loader import PROJECT_ROOT
@@ -11,9 +13,10 @@ RESULTS_DIR = PROJECT_ROOT / "results"
 SETTINGS = [(False, "no_guard"), (True, "guard")]
 
 
-def run_scenario(quotes, purchases, use_guard, make_attackers=None, log_name=None):
+def run_scenario(quotes, purchases, use_guard, make_attackers=None, log_name=None,
+                 registry_files=TEST_VENDORS):
     """Run one scenario in a fresh sandbox. Returns the bank, the bus and the requester."""
-    bus, bank, agents = build_sandbox(quotes, registry_files=TEST_VENDORS,
+    bus, bank, agents = build_sandbox(quotes, registry_files=registry_files,
                                       use_guard=use_guard, make_attackers=make_attackers)
     for case_id, item, quantity, budget in purchases:
         agents["requester"].start(bus, case_id, item, quantity, budget)
@@ -52,6 +55,37 @@ def run_normal():
         results[label] = (completed, len(NORMAL_PURCHASES), count_incidents(bus))
     return results
 
+def run_workload(n=1000):
+    """Real BPI purchases with the real vendor list, without and with the guard."""
+    quotes, purchases = sample_purchases(n)
+    results = {}
+    for use_guard, label in SETTINGS:
+        start = time.perf_counter()
+        bank, bus, requester = run_scenario(quotes, purchases, use_guard,
+                                            log_name=f"bpi_workload_{label}", registry_files=None)
+        seconds = time.perf_counter() - start
+        outcomes = list(requester.outcomes.values())
+        to_human = sum(1 for r in bus.log
+                       if (r["kind"] == "escalation" and r["verdict"] == "ALLOW") or r["verdict"] == "ESCALATE")
+        results[label] = {
+            "purchases": len(purchases),
+            "paid": sum(1 for o in outcomes if o.startswith("PAID")),
+            "rejected_by_human": sum(1 for o in outcomes if o.startswith("REJECTED")),
+            "sent_to_human": to_human,
+            "false_alarms": count_incidents(bus),
+            "decisions": len(bus.log),
+            "ms_per_decision": round(1000 * seconds / max(len(bus.log), 1), 3),
+        }
+    return results
+
+
+def print_workload(results):
+    print("\nRealistic workload (real BPI purchases, real vendor list):")
+    for label, r in results.items():
+        share = 100 * r["sent_to_human"] / r["purchases"]
+        print(f"  {label:9} paid {r['paid']}/{r['purchases']}, rejected by human {r['rejected_by_human']}, "
+              f"sent to human {r['sent_to_human']} ({share:.1f}%), false alarms {r['false_alarms']}, "
+              f"{r['decisions']} decisions, {r['ms_per_decision']} ms per decision")
 
 def print_table(rows, normal):
     print(f"{'Attack':22} {'Family':26} {'Compromised':12} {'No guard':10} {'With guard':11} Guard incidents")
@@ -86,3 +120,12 @@ if __name__ == "__main__":
     normal = run_normal()
     print_table(rows, normal)
     print("\nResults saved to", save_csv(rows, "attacks_scripted"))
+    
+    workload = run_workload()
+    print_workload(workload)
+    workload_rows = []
+    for label, r in workload.items():
+        row = {"setting": label}
+        row.update(r)
+        workload_rows.append(row)
+    print("Workload results saved to", save_csv(workload_rows, "workload_bpi"))

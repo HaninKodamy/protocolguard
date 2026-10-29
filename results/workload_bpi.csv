@@ -1,0 +1,3 @@
+setting,purchases,paid,rejected_by_human,sent_to_human,false_alarms,decisions,ms_per_decision
+no_guard,1000,939,61,116,0,4994,0.069
+guard,1000,939,61,116,0,4994,0.068
