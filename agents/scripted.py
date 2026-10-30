@@ -114,7 +114,10 @@ def build_sandbox(quotes, registry_files=None, use_guard=True, make_attackers=No
     use_guard=False gives the no-guard baseline.
     make_attackers(protocol) can return compromised agents that replace honest ones, by role.
     """
-    protocol = load_protocol(PROTOCOL_FILE, registry_files=registry_files)
+    offers = {case_id: [{"vendor_id": quote["vendor_id"], "amount": quote["amount"]} for quote in case_quotes]
+        for case_id, case_quotes in quotes.items()}
+    protocol = load_protocol(PROTOCOL_FILE, registry_files=registry_files,
+        runtime_registries={"offers": offers})
     guard = ProtocolGuard(protocol) if use_guard else NoGuard(protocol)
     bank = FakeBank()
     bus = MessageBus(guard)

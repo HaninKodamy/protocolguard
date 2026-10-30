@@ -4,7 +4,7 @@
 
 protocol:
   name: purchase_to_pay
-  version: "0.2"
+  version: "0.3"
 
 roles:
   requester:
@@ -30,6 +30,7 @@ parameters:
 # Registries: trusted company data the guard checks against.
 registries:
   vendors: data/vendors_bpi.yaml   # real vendors (BPI 2019); tests use data/vendors.yaml
+  offers: runtime                  # the structured offers vendors submitted; provided when the system starts
 
 # Escalation: what "escalate" means in this protocol.
 escalation:
@@ -59,6 +60,11 @@ messages:
       - type: max_from_case        # the amount must not exceed the requested budget
         field: amount
         case_field: budget
+        on_fail: block
+      - type: matches_offer        # vendor and amount must match an offer that vendor actually submitted
+        field: amount
+        registry: offers
+        key_field: vendor_id
         on_fail: block
 
   approval:

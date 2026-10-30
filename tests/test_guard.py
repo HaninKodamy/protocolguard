@@ -5,18 +5,20 @@ from itertools import count
 import pytest
 
 from guards.protocol_guard import ALLOW, BLOCK, ESCALATE, Message, NoGuard, ProtocolGuard
-from protocol.loader import PROJECT_ROOT, load_protocol
+from protocol.loader import PROJECT_ROOT, ProtocolError, load_protocol
 from agents.scripted import build_sandbox
 
 PROTOCOL_FILE = PROJECT_ROOT / "protocol" / "purchase_protocol.yaml"
 TEST_VENDORS = {"vendors": "data/vendors.yaml"}
+TEST_OFFERS = {"offers": {"PO-1": [{"vendor_id": "V001", "amount": 850},
+                                   {"vendor_id": "V001", "amount": 5400}]}}
 message_ids = count(1)
 
 
 @pytest.fixture
 def guard():
-    """A fresh guard for every test, using the small vendor list."""
-    protocol = load_protocol(PROTOCOL_FILE, registry_files=TEST_VENDORS)
+    """A fresh guard for every test, using the small vendor list and the test offers."""
+    protocol = load_protocol(PROTOCOL_FILE, registry_files=TEST_VENDORS, runtime_registries=TEST_OFFERS)
     return ProtocolGuard(protocol)
 
 
@@ -237,8 +239,28 @@ def test_fake_sender_in_payload_changes_nothing():
     assert decision.message.sender == "procurement"
 
 def test_no_guard_baseline_allows_everything():
-    protocol = load_protocol(PROTOCOL_FILE, registry_files=TEST_VENDORS)
+    protocol = load_protocol(PROTOCOL_FILE, registry_files=TEST_VENDORS, runtime_registries=TEST_OFFERS)
     decision = NoGuard(protocol).check(
         Message(message_id="x", case_id="PO-1", sender="procurement",
                 receiver="payment", kind="approval", payload={}))
     assert decision.verdict == ALLOW
+
+# ---------- Version 0.3: binding the recommendation to a recorded offer ----------
+
+def test_amount_not_offered_is_blocked(guard):
+    request(guard, "PO-1")
+    decision = recommend(guard, "PO-1", amount=4900)
+    assert decision.verdict == BLOCK
+    assert "matches_offer" in decision.reason
+
+
+def test_vendor_without_an_offer_is_blocked(guard):
+    request(guard, "PO-1")
+    decision = recommend(guard, "PO-1", vendor="V002", amount=850)
+    assert decision.verdict == BLOCK
+    assert "matches_offer" in decision.reason
+
+
+def test_protocol_refuses_to_start_without_offers():
+    with pytest.raises(ProtocolError):
+        load_protocol(PROTOCOL_FILE, registry_files=TEST_VENDORS)

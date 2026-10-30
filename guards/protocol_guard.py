@@ -143,7 +143,7 @@ class ProtocolGuard:
         memory = case.memory if case else {}
         escalate_reason = ""
         for condition in rule.get("conditions", []):
-            if self._condition_holds(condition, message.payload, memory):
+            if self._condition_holds(condition, message.payload, memory, message.case_id):
                 continue
             reason = describe(condition, message.payload.get(condition["field"]))
             if condition["on_fail"] == "block":
@@ -153,7 +153,7 @@ class ProtocolGuard:
             return ESCALATE, escalate_reason
         return ALLOW, ""
 
-    def _condition_holds(self, condition, payload, memory):
+    def _condition_holds(self, condition, payload, memory, case_id):
         """Return True if one condition is satisfied."""
         kind = condition["type"]
         value = payload.get(condition["field"])
@@ -175,6 +175,11 @@ class ProtocolGuard:
         if kind == "max_parameter":
             limit = self.protocol.parameters[condition["parameter"]]
             return is_number(value) and value <= limit
+        if kind == "matches_offer":
+            vendor = payload.get(condition["key_field"])
+            offers = self.protocol.registries[condition["registry"]].get(case_id, [])
+            return (isinstance(vendor, str) and is_number(value)
+                and any(offer["vendor_id"] == vendor and offer["amount"] == value for offer in offers))
         return False
 
     def _refuse(self, verdict, reason, message):

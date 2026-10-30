@@ -14,6 +14,7 @@ CONDITION_TYPES = {
     "matches_case": {"field", "case_field"},
     "max_parameter": {"field", "parameter"},
     "matches_registry": {"field", "registry", "key_field", "registry_field"},
+    "matches_offer": {"field", "registry", "key_field"},
 }
 ON_FAIL_OPTIONS = {"block", "escalate"}
 
@@ -42,16 +43,22 @@ def read_yaml(path):
     with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
-def load_registries(raw, overrides=None):
-    """Read every registry file named in the protocol.
-
+def load_registries(raw, overrides=None, runtime=None):
+    """Read every registry named in the protocol.
     overrides can replace a registry's file, e.g. {"vendors": "data/vendors.yaml"} in tests.
+    runtime gives the data for registries marked 'runtime' in the protocol, e.g. the offers.
     """
     paths = dict(raw.get("registries", {}))
     paths.update(overrides or {})
+    runtime = runtime or {}
 
     registries = {}
     for name, relative_path in paths.items():
+        if relative_path == "runtime":
+            if name not in runtime:
+                raise ProtocolError(f"Registry '{name}' must be provided when the system starts")
+            registries[name] = runtime[name]
+            continue
         file_path = PROJECT_ROOT / relative_path
         if not file_path.exists():
             raise ProtocolError(f"Registry '{name}' file not found: {relative_path}")
@@ -141,10 +148,10 @@ def check_protocol(raw, registries):
 
     return errors
 
-def load_protocol(path, registry_files=None):
+def load_protocol(path, registry_files=None, runtime_registries=None):
     """Read, check and return a protocol. Stops with an error if anything is wrong."""
     raw = read_yaml(path)
-    registries = load_registries(raw, registry_files)
+    registries = load_registries(raw, registry_files, runtime_registries)
     errors = check_protocol(raw, registries)
     if errors:
         raise ProtocolError("Protocol has problems:\n  - " + "\n  - ".join(errors))
@@ -185,7 +192,8 @@ def print_summary(protocol):
 
 if __name__ == "__main__":
     try:
-        protocol = load_protocol(PROJECT_ROOT / "protocol" / "purchase_protocol.yaml")
+        protocol = load_protocol(PROJECT_ROOT / "protocol" / "purchase_protocol.yaml",
+            runtime_registries={"offers": {}})
     except ProtocolError as error:
         print(error)
     else:
