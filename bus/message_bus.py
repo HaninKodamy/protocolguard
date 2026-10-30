@@ -17,10 +17,11 @@ class FakeBank:
     def __init__(self):
         self.ledger = []
 
-    def execute_payment(self, payload):
+    def execute_payment(self, case_id, payload):
         transaction_id = f"T-{len(self.ledger) + 1:04d}"
         self.ledger.append({
             "transaction_id": transaction_id,
+            "case_id": case_id,
             "vendor_id": payload["vendor_id"],
             "amount": payload["amount"],
             "account": payload["account"],
@@ -69,7 +70,7 @@ class MessageBus:
         self._record(agent_name, decision)
         result = None
         if decision.verdict == ALLOW:
-            result = self.tools[action](payload)
+            result = self.tools[action](case_id, payload)
         elif decision.verdict == ESCALATE:
             self.queue.append(self._escalation_notice(decision))
         return decision, result
