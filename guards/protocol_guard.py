@@ -69,6 +69,8 @@ class ProtocolGuard:
         self.seen_ids.add(message.message_id)
 
         # 2. Deny by default: anything not in the protocol is never allowed.
+        if not isinstance(message.kind, str):
+            return self._refuse(BLOCK, f"malformed message type: {message.kind!r}", message)
         rules = self.protocol.actions if message.is_action else self.protocol.messages
         rule = rules.get(message.kind)
         if rule is None:

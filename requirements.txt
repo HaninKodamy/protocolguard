@@ -1,3 +1,6 @@
 pyyaml
 pandas
 pytest
+google-genai
+python-dotenv
+ollama
