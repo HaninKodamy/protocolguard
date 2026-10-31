@@ -3,6 +3,7 @@
 **Execution guards for LLM multi-agent workflows.** Every message and action between agents is checked at runtime against an explicit interaction protocol (roles, states, value conditions, actions), tested on real purchase data (BPI Challenge 2019) and local LLM agents.
 
 
+📄 Technical report (version 1, ongoing project): [docs/ProtocolGuard_Technical_Report.pdf](docs/ProtocolGuard_Technical_Report.pdf)
 
 ## Why
 
