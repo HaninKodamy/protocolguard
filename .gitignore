@@ -5,3 +5,5 @@ __pycache__/
 data/bpi2019/
 data/vendors_bpi.yaml
 logs/
+*.docx
+~$*
