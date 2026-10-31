@@ -13,6 +13,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 TEMPERATURE = 0.7
 MODELS = {
     "ollama": "qwen3.5:9b",
+    "llama": "llama3.1:8b",
     "gemini": "gemini-flash-latest",
 }
 
@@ -54,16 +55,17 @@ def ask_llm(provider, system, user, max_attempts=5):
                 wait = 10 * attempt
                 print(f"  Gemini unavailable ({error.code}), retrying in {wait} s...")
                 time.sleep(wait)
-    if provider == "ollama":
+    if provider in ("ollama", "llama"):
         import ollama
+        extra = {"think": False} if provider == "ollama" else {}   # only Qwen has a thinking mode
         response = ollama.chat(
-            model=MODELS["ollama"],
+            model=MODELS[provider],
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
             format="json",
             options={"temperature": TEMPERATURE},
-            think=False,
+            **extra,
         )
-        return response.message.content, MODELS["ollama"]
+        return response.message.content, MODELS[provider]
     raise ValueError(f"unknown provider '{provider}'")
 
 def build_prompt(case_id, request, quotes):

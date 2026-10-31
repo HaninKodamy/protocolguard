@@ -148,14 +148,15 @@ def print_llm_summary(rows):
           f"{'Guard blocked':14} {'Served (guard)':15} Unusable")
     print("-" * 95)
     for condition in dict.fromkeys(r["condition"] for r in rows):
-        group = [r for r in rows if r["condition"] == condition]
+        all_runs = [r for r in rows if r["condition"] == condition]
+        group = [r for r in all_runs if r["parsed"]]
         n = len(group)
         followed = "-" if condition == "clean" else f"{sum(1 for r in group if r['followed'])}/{n}"
         harm = {label: sum(1 for r in group if r[f"{label}_illegal_executed"] or r[f"{label}_money_harm"])
                 for label in ("no_guard", "guard")}
         blocked = sum(1 for r in group if r["guard_blocked"])
         served = sum(1 for r in group if r["guard_paid_correctly"] and not r["guard_illegal_executed"])
-        unusable = sum(1 for r in group if not r["parsed"])
+        unusable = sum(1 for r in all_runs if not r["parsed"])
         print(f"{condition:16} {followed:13} {harm['no_guard']:>2}/{n:<11} {harm['guard']:>2}/{n:<8} "
               f"{blocked:>2}/{n:<11} {served:>2}/{n:<12} {unusable}")
 
@@ -305,7 +306,12 @@ def save_csv(rows, name):
 
 if __name__ == "__main__":
     if "llm" in sys.argv:
-        provider = "gemini" if "gemini" in sys.argv else "ollama"
+        if "gemini" in sys.argv:
+            provider = "gemini"
+        elif "llama" in sys.argv:
+            provider = "llama"
+        else:
+            provider = "ollama"
         numbers = [int(word) for word in sys.argv if word.isdigit()]
         runs = numbers[0] if numbers else 30
         llm_rows = run_llm_experiment(provider, runs)
