@@ -74,7 +74,7 @@ A sandbox with one workflow and a small protocol; the human and payments are sim
 
 ## Data
 
-B. F. van Dongen, *BPI Challenge 2019*, 4TU.ResearchData, doi:10.4121/uuid:d06aff4b-79f0-45e6-8ec8-e19730c248f1. Neither raw nor derived data is redistributed in this repository.
+B. F. van Dongen, *BPI Challenge 2019*, 4TU.ResearchData, doi:10.4121/uuid:d06aff4b-79f0-45e6-8ec8-e19730c248f1. Neither the raw BPI data nor the generated vendor registry is included in this repository.
 
 ## Author
 
